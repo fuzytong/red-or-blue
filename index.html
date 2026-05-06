@@ -193,7 +193,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#040a10;display:flex
           <div class="r-sub" id="rs">—</div>
           <div class="r-data" id="rd">—</div>
         </div>
-        <button class="restart-btn" onclick="window._rob && window._rob.adminRestart()">[ 重新开始 // RESTART ]</button>
+        <button class="restart-btn" onclick="adminRestart()">[ 重新开始 // RESTART ]</button>
       </div>
     </div>
     <div class="bottom-hud">
@@ -205,10 +205,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#040a10;display:flex
 </div>
 
 <script>
-/* ─── 全局函数，供 onclick 调用 ─── */
-window.castVote = function(c){ window._rob && window._rob.castVote(c); };
-
-/* ─── Firebase 配置 ─── */
+/* Firebase 配置 */
 var FIREBASE_CONFIG = {
   apiKey: "AIzaSyAuNxBb_8BIm4kw1MX_vfcHKoeNSdSSWHA",
   authDomain: "red-or-blue-bcaf5.firebaseapp.com",
@@ -223,210 +220,182 @@ var TOTAL_MS = 24 * 3600 * 1000;
 var ROUND_KEY = 'round_1';
 var LS_KEY = 'rob_vote_' + ROUND_KEY;
 
-function pad(n, l){ l=l||2; return String(n).padStart(l,'0'); }
-function $id(id){ return document.getElementById(id); }
-function setStatus(t){ $id('sync-status').textContent = t; }
+function pad(n, l) { l = l || 2; return String(n).padStart(l, '0'); }
+function $id(id) { return document.getElementById(id); }
+function setStatus(t) { $id('sync-status').textContent = t; }
 
-/* ─── 加载 Firebase SDK ─── */
-var fbScript = document.createElement('script');
-fbScript.src = 'https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-compat-all.js';
-fbScript.onerror = function(){
-  /* 第一个 CDN 失败，尝试 unpkg */
-  var s2 = document.createElement('script');
-  s2.src = 'https://unpkg.com/firebase@9.22.2/firebase-app-compat.js';
-  s2.onload = function(){
-    var s3 = document.createElement('script');
-    s3.src = 'https://unpkg.com/firebase@9.22.2/firebase-database-compat.js';
-    s3.onload = bootFirebase;
-    s3.onerror = fallbackLocal;
-    document.head.appendChild(s3);
-  };
-  s2.onerror = fallbackLocal;
-  document.head.appendChild(s2);
-};
-fbScript.onload = bootFirebase;
-document.head.appendChild(fbScript);
+var deadline = null;
+var myVote = localStorage.getItem(LS_KEY) || '';
+var ended = false;
+var rafId = null;
+var dbRef = null;
 
-/* ─── 核心逻辑 ─── */
-var state = {
-  deadline: null,
-  myVote: localStorage.getItem(LS_KEY) || '',
-  ended: false,
-  rafId: null,
-  db: null,
-  dbRef: null
-};
-
-function tick(){
-  if(!state.deadline){ state.rafId = requestAnimationFrame(tick); return; }
+function tick() {
+  if (!deadline) { rafId = requestAnimationFrame(tick); return; }
   var now = Date.now();
-  var remain = Math.max(0, state.deadline - now);
+  var remain = Math.max(0, deadline - now);
   var elapsed = Math.max(0, TOTAL_MS - remain);
-  var h=Math.floor(remain/3600000), m=Math.floor((remain%3600000)/60000);
-  var s=Math.floor((remain%60000)/1000), cs=Math.floor((remain%1000)/10);
-  $id('cdval').childNodes[0].textContent = pad(h)+':'+pad(m)+':'+pad(s);
+  var h = Math.floor(remain / 3600000);
+  var m = Math.floor((remain % 3600000) / 60000);
+  var s = Math.floor((remain % 60000) / 1000);
+  var cs = Math.floor((remain % 1000) / 10);
+  $id('cdval').childNodes[0].textContent = pad(h) + ':' + pad(m) + ':' + pad(s);
   $id('cdms').textContent = pad(cs);
   $id('belapsed').textContent =
-    pad(Math.floor(elapsed/3600000))+':'+pad(Math.floor((elapsed%3600000)/60000))+':'+
-    pad(Math.floor((elapsed%60000)/1000))+'.'+pad(Math.floor((elapsed%1000)/10));
-  if(remain <= 0 && !state.ended){ endGame(); return; }
-  state.rafId = requestAnimationFrame(tick);
+    pad(Math.floor(elapsed / 3600000)) + ':' +
+    pad(Math.floor((elapsed % 3600000) / 60000)) + ':' +
+    pad(Math.floor((elapsed % 60000) / 1000)) + '.' +
+    pad(Math.floor((elapsed % 1000) / 10));
+  if (remain <= 0 && !ended) { endGame(); return; }
+  rafId = requestAnimationFrame(tick);
 }
 
-function startTick(deadline){
-  state.deadline = deadline;
-  if(state.rafId) cancelAnimationFrame(state.rafId);
-  state.rafId = requestAnimationFrame(tick);
-}
-
-function applyVotedUI(c){
-  var panel = $id('cp-'+c);
-  var other = $id('cp-'+(c==='r'?'b':'r'));
-  panel.classList.add('voted-panel');
-  $id('v-'+c).classList.add('show');
+function applyVotedUI(c) {
+  $id('cp-' + c).classList.add('voted-panel');
+  $id('v-' + c).classList.add('show');
+  var other = $id('cp-' + (c === 'r' ? 'b' : 'r'));
   other.style.opacity = '0.3';
   other.style.cursor = 'default';
   other.onclick = null;
   $id('locked').classList.add('show');
 }
 
-function endGame(){
-  state.ended = true;
-  cancelAnimationFrame(state.rafId);
+function endGame() {
+  ended = true;
+  cancelAnimationFrame(rafId);
   $id('cdval').childNodes[0].textContent = '00:00:00';
   $id('cdms').textContent = '00';
   $id('btnzone').style.display = 'none';
   $id('locked').classList.remove('show');
   $id('rzone').classList.add('show');
-  if(state.dbRef){
-    state.dbRef.child('votes').get().then(function(snap){
-      var v = snap.val() || {r:0,b:0};
-      showResult(v.r||0, v.b||0);
-    });
+  dbRef.child('votes').get().then(function(snap) {
+    var v = snap.val() || { r: 0, b: 0 };
+    showResult(v.r || 0, v.b || 0);
+  });
+}
+
+function showResult(vr, vb) {
+  var tot = vr + vb;
+  var rbox = $id('rbox');
+  if (tot === 0) {
+    rbox.className = 'result-box rc-neutral';
+    $id('rh').textContent = '无人投票';
+    $id('rh').style.color = '#8db8cc';
+    $id('rs').textContent = '本轮无有效投票记录';
+    $id('rd').textContent = '总票数: 0';
+    return;
+  }
+  var rp = vr / tot, bp = vb / tot;
+  setTimeout(function() {
+    $id('rfill').style.width = (rp * 100) + '%';
+    $id('bfill').style.width = (bp * 100) + '%';
+  }, 120);
+  $id('rpct').textContent = (rp * 100).toFixed(1) + '%';
+  $id('bpct').textContent = (bp * 100).toFixed(1) + '%';
+  $id('rd').textContent = '总票数: ' + tot + '  ·  红票: ' + vr + '  ·  蓝票: ' + vb;
+  if (rp >= 0.8) {
+    rbox.className = 'result-box rc-red';
+    $id('rh').textContent = '全员死亡';
+    $id('rh').style.color = '#e03030';
+    $id('rs').textContent = '红票比例达 ' + (rp * 100).toFixed(1) + '%，超过 80% 阈值\n极度自私摧毁了所有人的生存';
+  } else if (bp >= 0.8) {
+    rbox.className = 'result-box rc-blue';
+    $id('rh').textContent = '所有人幸存';
+    $id('rh').style.color = '#4090e0';
+    $id('rs').textContent = '蓝票支持率 ' + (bp * 100).toFixed(1) + '%，超过 80%\n人类选择了信任，共同存活';
   } else {
-    var lv = JSON.parse(localStorage.getItem('rob_votes_local')||'{"r":0,"b":0}');
-    showResult(lv.r||0, lv.b||0);
+    rbox.className = 'result-box rc-red';
+    $id('rh').textContent = '红票者幸存';
+    $id('rh').style.color = '#e03030';
+    $id('rs').textContent = '蓝票仅得 ' + (bp * 100).toFixed(1) + '%，不足 80%\n' + vr + ' 人幸存，' + vb + ' 名蓝票者消亡';
   }
 }
 
-function showResult(vr, vb){
-  var tot = vr+vb, rbox = $id('rbox');
-  if(tot===0){
-    rbox.className='result-box rc-neutral';
-    $id('rh').textContent='无人投票'; $id('rh').style.color='#8db8cc';
-    $id('rs').textContent='本轮无有效投票记录';
-    $id('rd').textContent='总票数: 0'; return;
-  }
-  var rp=vr/tot, bp=vb/tot;
-  setTimeout(function(){
-    $id('rfill').style.width=(rp*100)+'%';
-    $id('bfill').style.width=(bp*100)+'%';
-  },120);
-  $id('rpct').textContent=(rp*100).toFixed(1)+'%';
-  $id('bpct').textContent=(bp*100).toFixed(1)+'%';
-  $id('rd').textContent='总票数: '+tot+'  ·  红票: '+vr+'  ·  蓝票: '+vb;
-  if(rp>=0.8){
-    rbox.className='result-box rc-red';
-    $id('rh').textContent='全员死亡'; $id('rh').style.color='#e03030';
-    $id('rs').textContent='红票比例达 '+(rp*100).toFixed(1)+'%，超过 80% 阈值\n极度自私摧毁了所有人的生存';
-  } else if(bp>=0.8){
-    rbox.className='result-box rc-blue';
-    $id('rh').textContent='所有人幸存'; $id('rh').style.color='#4090e0';
-    $id('rs').textContent='蓝票支持率 '+(bp*100).toFixed(1)+'%，超过 80%\n人类选择了信任，共同存活';
-  } else {
-    rbox.className='result-box rc-red';
-    $id('rh').textContent='红票者幸存'; $id('rh').style.color='#e03030';
-    $id('rs').textContent='蓝票仅得 '+(bp*100).toFixed(1)+'%，不足 80%\n'+vr+' 人幸存，'+vb+' 名蓝票者消亡';
-  }
+function castVote(c) {
+  if (myVote || ended) return;
+  myVote = c;
+  localStorage.setItem(LS_KEY, c);
+  applyVotedUI(c);
+  var inc = {};
+  inc['votes/' + c] = firebase.database.ServerValue.increment(1);
+  dbRef.update(inc);
 }
 
-/* ─── Firebase 启动 ─── */
-function bootFirebase(){
-  if(typeof firebase === 'undefined'){ fallbackLocal(); return; }
-  try {
-    firebase.initializeApp(FIREBASE_CONFIG);
-    var db = firebase.database();
-    var dbRef = db.ref(ROUND_KEY);
-    state.db = db; state.dbRef = dbRef;
-
-    dbRef.child('deadline').once('value').then(function(snap){
-      var dl = snap.val();
-      if(!dl){
-        dl = Date.now() + TOTAL_MS;
-        dbRef.child('deadline').set(dl);
-      }
-      setStatus('LIVE · SYNCED');
-      if(state.myVote) applyVotedUI(state.myVote);
-      if(Date.now() >= dl){ state.deadline = dl; endGame(); }
-      else { startTick(dl); }
-    }).catch(function(e){
-      setStatus('DB ERROR — 检查 databaseURL');
-      console.error('Deadline fetch failed:', e.message);
-      fallbackLocal();
-    });
-
-    dbRef.child('votes').on('value', function(snap){
-      var v = snap.val() || {r:0,b:0};
-      $id('vcnt').textContent = (v.r||0)+(v.b||0);
-    });
-
-  } catch(e){
-    setStatus('INIT ERROR');
-    console.error('Firebase init failed:', e.message);
-    fallbackLocal();
-  }
-}
-
-/* ─── 降级：本地模式（无 Firebase 时） ─── */
-function fallbackLocal(){
-  setStatus('本地模式 · 未同步');
-  var lsStart = 'rob_start_'+ROUND_KEY;
-  var ts = parseInt(localStorage.getItem(lsStart)||'0');
-  if(!ts){ ts = Date.now(); localStorage.setItem(lsStart, ts); }
-  var lv = JSON.parse(localStorage.getItem('rob_votes_local')||'{"r":0,"b":0}');
-  $id('vcnt').textContent = (lv.r||0)+(lv.b||0);
-  if(state.myVote) applyVotedUI(state.myVote);
-  var dl = ts + TOTAL_MS;
-  if(Date.now() >= dl){ state.deadline = dl; endGame(); }
-  else { startTick(dl); }
-
-  /* override castVote for local mode */
-  window._rob.castVote = function(c){
-    if(state.myVote || state.ended) return;
-    state.myVote = c;
-    localStorage.setItem(LS_KEY, c);
-    lv[c]++; localStorage.setItem('rob_votes_local', JSON.stringify(lv));
-    $id('vcnt').textContent = (lv.r||0)+(lv.b||0);
-    applyVotedUI(c);
-  };
-  window._rob.adminRestart = function(){
-    localStorage.removeItem(lsStart);
-    localStorage.removeItem('rob_votes_local');
+function adminRestart() {
+  dbRef.set({ deadline: Date.now() + TOTAL_MS, votes: { r: 0, b: 0 } }).then(function() {
     localStorage.removeItem(LS_KEY);
     location.reload();
-  };
+  });
 }
 
-/* ─── 暴露给按钮的接口 ─── */
-window._rob = {
-  castVote: function(c){
-    if(state.myVote || state.ended) return;
-    state.myVote = c;
-    localStorage.setItem(LS_KEY, c);
-    applyVotedUI(c);
-    if(state.dbRef){
-      var inc = {}; inc['votes/'+c] = firebase.database.ServerValue.increment(1);
-      state.dbRef.update(inc);
+function bootApp() {
+  firebase.initializeApp(FIREBASE_CONFIG);
+  var db = firebase.database();
+  dbRef = db.ref(ROUND_KEY);
+  dbRef.child('deadline').once('value').then(function(snap) {
+    var dl = snap.val();
+    if (!dl) {
+      dl = Date.now() + TOTAL_MS;
+      dbRef.child('deadline').set(dl);
     }
-  },
-  adminRestart: function(){
-    if(state.dbRef){
-      state.dbRef.set({deadline: Date.now()+TOTAL_MS, votes:{r:0,b:0}}).then(function(){
-        localStorage.removeItem(LS_KEY); location.reload();
-      });
+    deadline = dl;
+    setStatus('LIVE · SYNCED');
+    if (myVote) applyVotedUI(myVote);
+    if (Date.now() >= deadline) { endGame(); }
+    else { rafId = requestAnimationFrame(tick); }
+  }).catch(function(e) {
+    setStatus('DB ERROR: ' + e.code);
+    console.error(e);
+  });
+  dbRef.child('votes').on('value', function(snap) {
+    var v = snap.val() || { r: 0, b: 0 };
+    $id('vcnt').textContent = (v.r || 0) + (v.b || 0);
+  });
+}
+
+/* 动态加载 SDK，三个 CDN 依次尝试 */
+function loadScript(url, onload, onerror) {
+  var s = document.createElement('script');
+  s.src = url;
+  s.onload = onload;
+  s.onerror = onerror;
+  document.head.appendChild(s);
+}
+
+var CDNS = [
+  'https://cdn.jsdelivr.net/npm/firebase@9.22.2/firebase-app-compat.min.js',
+  'https://unpkg.com/firebase@9.22.2/firebase-app-compat.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-app-compat.min.js'
+];
+var DB_CDNS = [
+  'https://cdn.jsdelivr.net/npm/firebase@9.22.2/firebase-database-compat.min.js',
+  'https://unpkg.com/firebase@9.22.2/firebase-database-compat.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-database-compat.min.js'
+];
+
+function tryLoadApp(i) {
+  if (i >= CDNS.length) { setStatus('CDN FAILED — 检查网络'); return; }
+  loadScript(CDNS[i], function() {
+    tryLoadDb(i, 0);
+  }, function() {
+    tryLoadApp(i + 1);
+  });
+}
+
+function tryLoadDb(appIdx, dbIdx) {
+  if (dbIdx >= DB_CDNS.length) { setStatus('CDN FAILED — 检查网络'); return; }
+  loadScript(DB_CDNS[dbIdx], function() {
+    if (typeof firebase !== 'undefined') {
+      bootApp();
+    } else {
+      tryLoadDb(appIdx, dbIdx + 1);
     }
-  }
-};
+  }, function() {
+    tryLoadDb(appIdx, dbIdx + 1);
+  });
+}
+
+tryLoadApp(0);
 </script>
 </body>
 </html>
