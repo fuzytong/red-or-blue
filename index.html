@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>RED or BLUE</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#040a10;display:flex;justify-content:center}
+#shell{width:100%;max-width:430px;height:100vh;background:#060c12;color:#8db8cc;font-family:'Share Tech Mono',monospace;position:relative;display:flex;flex-direction:column;overflow:hidden}
+.grid-bg{position:absolute;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(rgba(100,180,220,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(100,180,220,0.025) 1px,transparent 1px);background-size:22px 22px}
+.inner{position:relative;z-index:2;display:flex;flex-direction:column;height:100%}
+.top-hud{padding:clamp(8px,2.2vh,16px) 16px clamp(6px,1.5vh,10px);border-bottom:1px solid rgba(100,180,220,0.1);text-align:center;flex-shrink:0}
+.hud-meta{display:flex;justify-content:space-between;font-size:8px;letter-spacing:2px;color:rgba(100,180,220,0.2);margin-bottom:6px}
+.hud-title{font-family:'Orbitron',monospace;font-size:clamp(20px,6vw,28px);font-weight:700;letter-spacing:7px;color:#c0ddf0}
+.hud-sub{font-size:8px;letter-spacing:3px;color:rgba(100,180,220,0.25);margin-top:4px}
+.countdown-zone{padding:clamp(8px,1.8vh,14px) 16px clamp(6px,1.4vh,10px);border-bottom:1px solid rgba(100,180,220,0.07);text-align:center;flex-shrink:0}
+.cd-label{font-size:8px;letter-spacing:3px;color:rgba(100,180,220,0.25);margin-bottom:7px}
+.cd-display{font-family:'Orbitron',monospace;font-size:clamp(22px,7vw,32px);font-weight:700;color:#c8e8f4;letter-spacing:3px;line-height:1}
+.cd-ms{font-size:clamp(14px,4vw,20px);color:rgba(180,220,240,0.28);letter-spacing:2px}
+.cd-units{display:flex;justify-content:center;margin-top:4px;font-size:8px;letter-spacing:2px;color:rgba(100,180,220,0.2)}
+.cd-u{min-width:48px;text-align:center}
+.cd-sep-sp{min-width:12px}
+.status-row{display:flex;justify-content:center;align-items:center;gap:7px;margin-top:5px;font-size:8px;letter-spacing:2px;color:rgba(100,180,220,0.22)}
+.dot{width:5px;height:5px;border-radius:50%;background:#3af;animation:blink 1.2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.1}}
+.rules-zone{padding:clamp(8px,1.6vh,12px) 16px clamp(6px,1.2vh,10px);border-bottom:1px solid rgba(100,180,220,0.07);flex-shrink:0}
+.rules-header{display:flex;align-items:center;gap:8px;font-size:8px;letter-spacing:2px;color:rgba(100,180,220,0.25);margin-bottom:7px}
+.rules-header::before,.rules-header::after{content:'';flex:1;height:1px;background:rgba(100,180,220,0.08)}
+.rule-item{display:flex;align-items:flex-start;gap:8px;padding:4px 0;border-bottom:1px solid rgba(100,180,220,0.04)}
+.rule-item:last-child{border-bottom:none;padding-bottom:0}
+.rule-key{font-size:8px;letter-spacing:1px;padding:2px 6px;border:1px solid;white-space:nowrap;margin-top:1px;flex-shrink:0}
+.rk-b{color:#4a8ee0;border-color:rgba(40,100,200,0.45);background:rgba(4,12,50,0.7)}
+.rk-bx{color:#c84040;border-color:rgba(180,40,40,0.45);background:rgba(50,4,4,0.7)}
+.rk-x{color:#a08060;border-color:rgba(160,120,80,0.32);background:rgba(20,14,4,0.6)}
+.rk-i{color:rgba(100,180,220,0.38);border-color:rgba(100,180,220,0.1);background:transparent}
+.rule-text{font-size:clamp(10px,2.6vw,11px);line-height:1.6;letter-spacing:0.2px;color:rgba(180,210,230,0.58)}
+.rule-em-b{color:#5aa0f0;font-style:normal}
+.rule-em-r{color:#e05050;font-style:normal}
+.rule-em-w{color:rgba(220,180,100,0.82);font-style:normal}
+.vote-status{padding:5px 16px;font-size:8px;letter-spacing:2px;color:rgba(100,180,220,0.2);text-align:center;border-bottom:1px solid rgba(100,180,220,0.05);flex-shrink:0}
+.vote-status span{color:rgba(140,200,240,0.5)}
+.button-zone{display:flex;gap:10px;padding:clamp(10px,2vh,16px) 16px clamp(8px,1.6vh,12px);flex:1;min-height:0}
+.choice-panel{flex:1;border:1px solid;padding:12px 10px;cursor:pointer;position:relative;overflow:hidden;transition:border-color 0.15s,background 0.25s,transform 0.1s;user-select:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(6px,1.4vh,12px)}
+.choice-panel:active{transform:scale(0.965)}
+.panel-r{border-color:rgba(180,40,40,0.28);background:rgba(28,4,4,0.55)}
+.panel-r:hover:not(.voted-panel){border-color:rgba(220,60,60,0.5)}
+.panel-b{border-color:rgba(30,80,180,0.28);background:rgba(4,10,36,0.55)}
+.panel-b:hover:not(.voted-panel){border-color:rgba(60,120,230,0.5)}
+.panel-r.voted-panel{background:#5a0000;border-color:rgba(255,80,80,0.6);cursor:default}
+.panel-b.voted-panel{background:#001460;border-color:rgba(80,140,255,0.6);cursor:default}
+.panel-r.voted-panel .circ-r{background:rgba(255,80,80,0.15);border-color:rgba(255,100,100,0.5)}
+.panel-b.voted-panel .circ-b{background:rgba(80,140,255,0.15);border-color:rgba(100,160,255,0.5)}
+.panel-r.voted-panel .circ-r .circ-inner{background:#ff2020;color:#fff;border-color:rgba(255,160,160,0.5)}
+.panel-b.voted-panel .circ-b .circ-inner{background:#1040e0;color:#fff;border-color:rgba(160,200,255,0.5)}
+.panel-r.voted-panel .p-name{color:#ff8080}
+.panel-b.voted-panel .p-name{color:#80b8ff}
+.p-code{font-size:8px;letter-spacing:2px;opacity:0.3}
+.panel-r .p-code{color:#e06060}
+.panel-b .p-code{color:#60a0e0}
+.circ-outer{width:clamp(58px,15vw,78px);height:clamp(58px,15vw,78px);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.circ-r{width:100%;height:100%;border-radius:50%;border:1px solid rgba(200,50,50,0.32);background:rgba(28,4,4,0.9);display:flex;align-items:center;justify-content:center;transition:background 0.25s,border-color 0.25s}
+.circ-b{width:100%;height:100%;border-radius:50%;border:1px solid rgba(40,100,200,0.32);background:rgba(4,10,30,0.9);display:flex;align-items:center;justify-content:center;transition:background 0.25s,border-color 0.25s}
+.circ-inner{width:clamp(40px,10vw,52px);height:clamp(40px,10vw,52px);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-size:10px;font-weight:700;letter-spacing:1px;border:1px solid;transition:background 0.25s,color 0.25s}
+.circ-r .circ-inner{background:#6a0000;color:#ffaaaa;border-color:rgba(255,80,80,0.35)}
+.circ-b .circ-inner{background:#00126a;color:#aaccff;border-color:rgba(80,140,255,0.35)}
+.p-name{font-family:'Orbitron',monospace;font-size:clamp(11px,3vw,13px);font-weight:700;letter-spacing:2px;transition:color 0.25s}
+.panel-r .p-name{color:#e05050}
+.panel-b .p-name{color:#4090e0}
+.p-voted-label{font-size:10px;letter-spacing:2px;padding:5px 0 0;border-top:1px solid;opacity:0;transition:opacity 0.4s;width:100%;text-align:center;font-family:'Orbitron',monospace;font-weight:700}
+.panel-r .p-voted-label{border-color:rgba(255,80,80,0.3);color:#ff8080}
+.panel-b .p-voted-label{border-color:rgba(80,140,255,0.3);color:#80b8ff}
+.p-voted-label.show{opacity:1}
+.corner-tl,.corner-tr,.corner-bl,.corner-br{position:absolute;width:7px;height:7px}
+.corner-tl{top:0;left:0;border-top:1px solid;border-left:1px solid}
+.corner-tr{top:0;right:0;border-top:1px solid;border-right:1px solid}
+.corner-bl{bottom:0;left:0;border-bottom:1px solid;border-left:1px solid}
+.corner-br{bottom:0;right:0;border-bottom:1px solid;border-right:1px solid}
+.panel-r .corner-tl,.panel-r .corner-tr,.panel-r .corner-bl,.panel-r .corner-br{border-color:rgba(200,60,60,0.32)}
+.panel-b .corner-tl,.panel-b .corner-tr,.panel-b .corner-bl,.panel-b .corner-br{border-color:rgba(40,100,200,0.32)}
+.panel-r.voted-panel .corner-tl,.panel-r.voted-panel .corner-tr,.panel-r.voted-panel .corner-bl,.panel-r.voted-panel .corner-br{border-color:rgba(255,100,100,0.6)}
+.panel-b.voted-panel .corner-tl,.panel-b.voted-panel .corner-tr,.panel-b.voted-panel .corner-bl,.panel-b.voted-panel .corner-br{border-color:rgba(80,140,255,0.6)}
+.locked-notice{display:none;margin:0 16px;padding:7px 12px;border:1px solid rgba(100,180,220,0.1);font-size:9px;letter-spacing:2px;color:rgba(100,180,220,0.35);text-align:center;flex-shrink:0}
+.locked-notice.show{display:block}
+.result-zone{display:none;padding:clamp(10px,2vh,16px) 16px clamp(8px,1.5vh,12px);flex:1;min-height:0}
+.result-zone.show{display:flex;flex-direction:column}
+.result-box{border:1px solid rgba(100,180,220,0.12);padding:14px;position:relative;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+.rc-tl,.rc-tr,.rc-bl,.rc-br{position:absolute;width:7px;height:7px}
+.rc-tl{top:0;left:0;border-top:1px solid;border-left:1px solid}
+.rc-tr{top:0;right:0;border-top:1px solid;border-right:1px solid}
+.rc-bl{bottom:0;left:0;border-bottom:1px solid;border-left:1px solid}
+.rc-br{bottom:0;right:0;border-bottom:1px solid;border-right:1px solid}
+.rc-neutral .rc-tl,.rc-neutral .rc-tr,.rc-neutral .rc-bl,.rc-neutral .rc-br{border-color:rgba(100,180,220,0.28)}
+.rc-red .rc-tl,.rc-red .rc-tr,.rc-red .rc-bl,.rc-red .rc-br{border-color:rgba(200,40,40,0.5)}
+.rc-blue .rc-tl,.rc-blue .rc-tr,.rc-blue .rc-bl,.rc-blue .rc-br{border-color:rgba(40,100,200,0.5)}
+.r-code{font-size:8px;letter-spacing:2px;opacity:0.25;margin-bottom:10px}
+.r-bar-row{display:flex;gap:8px;align-items:center;margin-bottom:5px}
+.r-lbl{font-size:8px;letter-spacing:1px;width:30px}
+.r-lbl-r{color:#e05050}.r-lbl-b{color:#4090e0}
+.r-track{flex:1;height:3px;background:rgba(255,255,255,0.06)}
+.r-fill-r{height:100%;background:#c03030;transition:width 1.2s ease}
+.r-fill-b{height:100%;background:#2060c0;transition:width 1.2s ease}
+.r-pct{font-size:10px;min-width:40px;text-align:right;letter-spacing:1px}
+.r-pct-r{color:#e05050}.r-pct-b{color:#4090e0}
+.r-divider{height:1px;background:rgba(100,180,220,0.07);margin:8px 0}
+.r-headline{font-family:'Orbitron',monospace;font-size:clamp(16px,4.5vw,20px);font-weight:700;letter-spacing:3px;margin-bottom:6px}
+.r-sub{font-size:10px;letter-spacing:0.4px;line-height:1.8;color:rgba(180,210,230,0.5);margin-bottom:8px;white-space:pre-line}
+.r-data{font-size:8px;letter-spacing:1px;line-height:2.2;color:rgba(100,180,220,0.24);margin-bottom:12px}
+.restart-btn{width:100%;padding:9px;background:rgba(100,180,220,0.04);border:1px solid rgba(100,180,220,0.15);color:#7ab0cc;font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:3px;cursor:pointer}
+.restart-btn:hover{background:rgba(100,180,220,0.09)}
+.bottom-hud{display:flex;justify-content:space-between;align-items:center;padding:5px 16px 7px;font-size:8px;letter-spacing:1px;color:rgba(100,180,220,0.15);border-top:1px solid rgba(100,180,220,0.06);flex-shrink:0}
+.brand{font-size:9px;letter-spacing:5px;color:rgba(100,180,220,0.2);text-align:center;flex:1}
+</style>
+</head>
+<body>
+<div id="shell">
+  <div class="grid-bg"></div>
+  <div class="inner">
+    <div class="top-hud">
+      <div class="hud-meta"><span>SYS-NODE: 4F2A</span><span>ENC: AES-256</span></div>
+      <div class="hud-title">RED or BLUE</div>
+      <div class="hud-sub">全球匿名投票 // 请谨慎选择</div>
+    </div>
+    <div class="countdown-zone">
+      <div class="cd-label">投票截止倒计时</div>
+      <div class="cd-display" id="cdval">--:--:--<span class="cd-ms">.<span id="cdms">--</span></span></div>
+      <div class="cd-units">
+        <div class="cd-u">时</div><div class="cd-sep-sp"></div>
+        <div class="cd-u">分</div><div class="cd-sep-sp"></div>
+        <div class="cd-u">秒</div><div class="cd-sep-sp"></div>
+        <div class="cd-u" style="min-width:36px">毫秒</div>
+      </div>
+      <div class="status-row"><div class="dot"></div><span id="sync-status">CONNECTING...</span></div>
+    </div>
+    <div class="rules-zone">
+      <div class="rules-header">投票规则</div>
+      <div class="rule-item">
+        <div class="rule-key rk-b">蓝票 ≥ 80%</div>
+        <div class="rule-text"><span class="rule-em-b">所有人</span>幸存</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-key rk-bx">蓝票 &lt; 80%</div>
+        <div class="rule-text">仅<span class="rule-em-r">红票投票者</span>幸存，蓝票投票者消亡</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-key rk-x">红票 ≥ 80%</div>
+        <div class="rule-text"><span class="rule-em-w">全员死亡</span>，无一幸存</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-key rk-i">结果</div>
+        <div class="rule-text">24小时倒计时结束后公布，<span class="rule-em-w">投票期间比例不可见</span></div>
+      </div>
+    </div>
+    <div class="vote-status">全球同步 · 当前已投 <span id="vcnt">—</span> 票</div>
+    <div class="button-zone" id="btnzone">
+      <div class="choice-panel panel-r" id="cp-r" onclick="castVote('r')">
+        <div class="corner-tl"></div><div class="corner-tr"></div>
+        <div class="corner-bl"></div><div class="corner-br"></div>
+        <div class="p-code">OPTION-R</div>
+        <div class="circ-outer"><div class="circ-r"><div class="circ-inner">RED</div></div></div>
+        <div class="p-name">红钮</div>
+        <div class="p-voted-label" id="v-r">// 已投红票 //</div>
+      </div>
+      <div class="choice-panel panel-b" id="cp-b" onclick="castVote('b')">
+        <div class="corner-tl"></div><div class="corner-tr"></div>
+        <div class="corner-bl"></div><div class="corner-br"></div>
+        <div class="p-code">OPTION-B</div>
+        <div class="circ-outer"><div class="circ-b"><div class="circ-inner">BLUE</div></div></div>
+        <div class="p-name">蓝钮</div>
+        <div class="p-voted-label" id="v-b">// 已投蓝票 //</div>
+      </div>
+    </div>
+    <div class="locked-notice" id="locked">// 投票已锁定，等待倒计时结束 //</div>
+    <div class="result-zone" id="rzone">
+      <div class="result-box rc-neutral" id="rbox">
+        <div class="rc-tl"></div><div class="rc-tr"></div>
+        <div class="rc-bl"></div><div class="rc-br"></div>
+        <div>
+          <div class="r-code">// 投票结果已解锁 //</div>
+          <div class="r-bar-row">
+            <div class="r-lbl r-lbl-r">RED</div>
+            <div class="r-track"><div class="r-fill-r" id="rfill" style="width:0%"></div></div>
+            <div class="r-pct r-pct-r" id="rpct">—</div>
+          </div>
+          <div class="r-bar-row">
+            <div class="r-lbl r-lbl-b">BLUE</div>
+            <div class="r-track"><div class="r-fill-b" id="bfill" style="width:0%"></div></div>
+            <div class="r-pct r-pct-b" id="bpct">—</div>
+          </div>
+          <div class="r-divider"></div>
+          <div class="r-headline" id="rh">—</div>
+          <div class="r-sub" id="rs">—</div>
+          <div class="r-data" id="rd">—</div>
+        </div>
+        <button class="restart-btn" onclick="window._rob && window._rob.adminRestart()">[ 重新开始 // RESTART ]</button>
+      </div>
+    </div>
+    <div class="bottom-hud">
+      <span id="belapsed" style="min-width:76px">00:00:00.00</span>
+      <span class="brand">FUTOPIO</span>
+      <span style="min-width:76px;text-align:right;opacity:0.7">ANON-VOTE</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ─── 全局函数，供 onclick 调用 ─── */
+window.castVote = function(c){ window._rob && window._rob.castVote(c); };
+
+/* ─── Firebase 配置 ─── */
+var FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAuNxBb_8BIm4kw1MX_vfcHKoeNSdSSWHA",
+  authDomain: "red-or-blue-bcaf5.firebaseapp.com",
+  databaseURL: "https://red-or-blue-bcaf5-default-rtdb.firebaseio.com",
+  projectId: "red-or-blue-bcaf5",
+  storageBucket: "red-or-blue-bcaf5.firebasestorage.app",
+  messagingSenderId: "171072598788",
+  appId: "1:171072598788:web:f2e7abf32ee8f018d5d651"
+};
+
+var TOTAL_MS = 24 * 3600 * 1000;
+var ROUND_KEY = 'round_1';
+var LS_KEY = 'rob_vote_' + ROUND_KEY;
+
+function pad(n, l){ l=l||2; return String(n).padStart(l,'0'); }
+function $id(id){ return document.getElementById(id); }
+function setStatus(t){ $id('sync-status').textContent = t; }
+
+/* ─── 加载 Firebase SDK ─── */
+var fbScript = document.createElement('script');
+fbScript.src = 'https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-compat-all.js';
+fbScript.onerror = function(){
+  /* 第一个 CDN 失败，尝试 unpkg */
+  var s2 = document.createElement('script');
+  s2.src = 'https://unpkg.com/firebase@9.22.2/firebase-app-compat.js';
+  s2.onload = function(){
+    var s3 = document.createElement('script');
+    s3.src = 'https://unpkg.com/firebase@9.22.2/firebase-database-compat.js';
+    s3.onload = bootFirebase;
+    s3.onerror = fallbackLocal;
+    document.head.appendChild(s3);
+  };
+  s2.onerror = fallbackLocal;
+  document.head.appendChild(s2);
+};
+fbScript.onload = bootFirebase;
+document.head.appendChild(fbScript);
+
+/* ─── 核心逻辑 ─── */
+var state = {
+  deadline: null,
+  myVote: localStorage.getItem(LS_KEY) || '',
+  ended: false,
+  rafId: null,
+  db: null,
+  dbRef: null
+};
+
+function tick(){
+  if(!state.deadline){ state.rafId = requestAnimationFrame(tick); return; }
+  var now = Date.now();
+  var remain = Math.max(0, state.deadline - now);
+  var elapsed = Math.max(0, TOTAL_MS - remain);
+  var h=Math.floor(remain/3600000), m=Math.floor((remain%3600000)/60000);
+  var s=Math.floor((remain%60000)/1000), cs=Math.floor((remain%1000)/10);
+  $id('cdval').childNodes[0].textContent = pad(h)+':'+pad(m)+':'+pad(s);
+  $id('cdms').textContent = pad(cs);
+  $id('belapsed').textContent =
+    pad(Math.floor(elapsed/3600000))+':'+pad(Math.floor((elapsed%3600000)/60000))+':'+
+    pad(Math.floor((elapsed%60000)/1000))+'.'+pad(Math.floor((elapsed%1000)/10));
+  if(remain <= 0 && !state.ended){ endGame(); return; }
+  state.rafId = requestAnimationFrame(tick);
+}
+
+function startTick(deadline){
+  state.deadline = deadline;
+  if(state.rafId) cancelAnimationFrame(state.rafId);
+  state.rafId = requestAnimationFrame(tick);
+}
+
+function applyVotedUI(c){
+  var panel = $id('cp-'+c);
+  var other = $id('cp-'+(c==='r'?'b':'r'));
+  panel.classList.add('voted-panel');
+  $id('v-'+c).classList.add('show');
+  other.style.opacity = '0.3';
+  other.style.cursor = 'default';
+  other.onclick = null;
+  $id('locked').classList.add('show');
+}
+
+function endGame(){
+  state.ended = true;
+  cancelAnimationFrame(state.rafId);
+  $id('cdval').childNodes[0].textContent = '00:00:00';
+  $id('cdms').textContent = '00';
+  $id('btnzone').style.display = 'none';
+  $id('locked').classList.remove('show');
+  $id('rzone').classList.add('show');
+  if(state.dbRef){
+    state.dbRef.child('votes').get().then(function(snap){
+      var v = snap.val() || {r:0,b:0};
+      showResult(v.r||0, v.b||0);
+    });
+  } else {
+    var lv = JSON.parse(localStorage.getItem('rob_votes_local')||'{"r":0,"b":0}');
+    showResult(lv.r||0, lv.b||0);
+  }
+}
+
+function showResult(vr, vb){
+  var tot = vr+vb, rbox = $id('rbox');
+  if(tot===0){
+    rbox.className='result-box rc-neutral';
+    $id('rh').textContent='无人投票'; $id('rh').style.color='#8db8cc';
+    $id('rs').textContent='本轮无有效投票记录';
+    $id('rd').textContent='总票数: 0'; return;
+  }
+  var rp=vr/tot, bp=vb/tot;
+  setTimeout(function(){
+    $id('rfill').style.width=(rp*100)+'%';
+    $id('bfill').style.width=(bp*100)+'%';
+  },120);
+  $id('rpct').textContent=(rp*100).toFixed(1)+'%';
+  $id('bpct').textContent=(bp*100).toFixed(1)+'%';
+  $id('rd').textContent='总票数: '+tot+'  ·  红票: '+vr+'  ·  蓝票: '+vb;
+  if(rp>=0.8){
+    rbox.className='result-box rc-red';
+    $id('rh').textContent='全员死亡'; $id('rh').style.color='#e03030';
+    $id('rs').textContent='红票比例达 '+(rp*100).toFixed(1)+'%，超过 80% 阈值\n极度自私摧毁了所有人的生存';
+  } else if(bp>=0.8){
+    rbox.className='result-box rc-blue';
+    $id('rh').textContent='所有人幸存'; $id('rh').style.color='#4090e0';
+    $id('rs').textContent='蓝票支持率 '+(bp*100).toFixed(1)+'%，超过 80%\n人类选择了信任，共同存活';
+  } else {
+    rbox.className='result-box rc-red';
+    $id('rh').textContent='红票者幸存'; $id('rh').style.color='#e03030';
+    $id('rs').textContent='蓝票仅得 '+(bp*100).toFixed(1)+'%，不足 80%\n'+vr+' 人幸存，'+vb+' 名蓝票者消亡';
+  }
+}
+
+/* ─── Firebase 启动 ─── */
+function bootFirebase(){
+  if(typeof firebase === 'undefined'){ fallbackLocal(); return; }
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    var db = firebase.database();
+    var dbRef = db.ref(ROUND_KEY);
+    state.db = db; state.dbRef = dbRef;
+
+    dbRef.child('deadline').once('value').then(function(snap){
+      var dl = snap.val();
+      if(!dl){
+        dl = Date.now() + TOTAL_MS;
+        dbRef.child('deadline').set(dl);
+      }
+      setStatus('LIVE · SYNCED');
+      if(state.myVote) applyVotedUI(state.myVote);
+      if(Date.now() >= dl){ state.deadline = dl; endGame(); }
+      else { startTick(dl); }
+    }).catch(function(e){
+      setStatus('DB ERROR — 检查 databaseURL');
+      console.error('Deadline fetch failed:', e.message);
+      fallbackLocal();
+    });
+
+    dbRef.child('votes').on('value', function(snap){
+      var v = snap.val() || {r:0,b:0};
+      $id('vcnt').textContent = (v.r||0)+(v.b||0);
+    });
+
+  } catch(e){
+    setStatus('INIT ERROR');
+    console.error('Firebase init failed:', e.message);
+    fallbackLocal();
+  }
+}
+
+/* ─── 降级：本地模式（无 Firebase 时） ─── */
+function fallbackLocal(){
+  setStatus('本地模式 · 未同步');
+  var lsStart = 'rob_start_'+ROUND_KEY;
+  var ts = parseInt(localStorage.getItem(lsStart)||'0');
+  if(!ts){ ts = Date.now(); localStorage.setItem(lsStart, ts); }
+  var lv = JSON.parse(localStorage.getItem('rob_votes_local')||'{"r":0,"b":0}');
+  $id('vcnt').textContent = (lv.r||0)+(lv.b||0);
+  if(state.myVote) applyVotedUI(state.myVote);
+  var dl = ts + TOTAL_MS;
+  if(Date.now() >= dl){ state.deadline = dl; endGame(); }
+  else { startTick(dl); }
+
+  /* override castVote for local mode */
+  window._rob.castVote = function(c){
+    if(state.myVote || state.ended) return;
+    state.myVote = c;
+    localStorage.setItem(LS_KEY, c);
+    lv[c]++; localStorage.setItem('rob_votes_local', JSON.stringify(lv));
+    $id('vcnt').textContent = (lv.r||0)+(lv.b||0);
+    applyVotedUI(c);
+  };
+  window._rob.adminRestart = function(){
+    localStorage.removeItem(lsStart);
+    localStorage.removeItem('rob_votes_local');
+    localStorage.removeItem(LS_KEY);
+    location.reload();
+  };
+}
+
+/* ─── 暴露给按钮的接口 ─── */
+window._rob = {
+  castVote: function(c){
+    if(state.myVote || state.ended) return;
+    state.myVote = c;
+    localStorage.setItem(LS_KEY, c);
+    applyVotedUI(c);
+    if(state.dbRef){
+      var inc = {}; inc['votes/'+c] = firebase.database.ServerValue.increment(1);
+      state.dbRef.update(inc);
+    }
+  },
+  adminRestart: function(){
+    if(state.dbRef){
+      state.dbRef.set({deadline: Date.now()+TOTAL_MS, votes:{r:0,b:0}}).then(function(){
+        localStorage.removeItem(LS_KEY); location.reload();
+      });
+    }
+  }
+};
+</script>
+</body>
+</html>
